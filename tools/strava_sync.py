@@ -133,6 +133,25 @@ def cmd_sync(a):
     print(f'{n_act} activités lues, {n_used} sur la carte. Relis data/events.json et data/tracks.json avant de pousser.')
 
 
+def cmd_club(a):
+    """Fil d'un club Strava privé (tes amis y sont membres) : sportif, sport, distance, durée. Pas de GPS ni de date côté API."""
+    tok = access_token()
+    if not a.id:
+        for c in api('/athlete/clubs', tok):
+            print(c['id'], c['name'], f'({c.get("member_count", "?")} membres)')
+        print('Relance avec --id <numéro du club>.')
+        return
+    rows = api(f'/clubs/{a.id}/activities', tok, per_page=a.n)
+    feed = []
+    for r in rows:
+        who = f'{r["athlete"].get("firstname", "?")} {r["athlete"].get("lastname", "")}'.strip()
+        feed.append({'who': who, 'type': r.get('sport_type') or r.get('type'), 'km': round(r.get('distance', 0) / 1000, 1), 'min': round(r.get('moving_time', 0) / 60)})
+        print(f'{who:<20} {feed[-1]["type"]:<10} {feed[-1]["km"]:>6} km  {feed[-1]["min"]:>4} min')
+    if a.write:
+        trails.save_json('club-feed.json', {'feed': feed}, indent=2)
+        print('data/club-feed.json écrit : il sera public une fois poussé, demande l\'accord de chacun avant.')
+
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='cmd', required=True)
@@ -140,5 +159,8 @@ if __name__ == '__main__':
     s = sub.add_parser('sync')
     s.add_argument('--since'); s.add_argument('--who')
     s.set_defaults(fn=cmd_sync)
+    c = sub.add_parser('club')
+    c.add_argument('--id'); c.add_argument('-n', type=int, default=30); c.add_argument('--write', action='store_true')
+    c.set_defaults(fn=cmd_club)
     a = ap.parse_args()
     a.fn(a)

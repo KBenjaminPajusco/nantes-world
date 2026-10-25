@@ -1,7 +1,7 @@
 // Registre des fonctionnalités « blagues et défis » : un module par idée, branché ici.
 // Un module exporte { id, init(ctx), update(ctx, dt) }. Voir .claude/skills/nantes-map-feature/SKILL.md.
-import challenges from './challenges.js?v=20261025163310';
-import trails from './trails.js?v=20261025163310';
+import challenges from './challenges.js?v=20261025164024';
+import trails from './trails.js?v=20261025164024';
 
 const FEATURES = [challenges, trails];
 

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { toon, outline } from './toon.js?v=20261025163310';
+import { toon, outline } from './toon.js?v=20261025164024';
 
 // Personnages : petites figurines stylisées (tête ronde, cheveux, torse évasé, mains, chaussures),
 // et agents IA à tête-écran. Chaque membre est un seul maillage à couleurs par sommet :

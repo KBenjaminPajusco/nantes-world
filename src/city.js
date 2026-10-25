@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { toon, rng } from './toon.js?v=20261025163310';
+import { toon, rng } from './toon.js?v=20261025164024';
 
 // La ville : OpenStreetMap + relief IGN (data/nantes.json, data/dem.bin), mètres locaux, x = est, z = sud.
 // Relief : maillage régulier de 10 m ; routes, parcs, arbres et bâtiments y sont posés.
