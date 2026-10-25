@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { toon, rng } from './toon.js?v=20261025162727';
+import { toon, rng } from './toon.js?v=20261025163310';
 
 // La ville : OpenStreetMap + relief IGN (data/nantes.json, data/dem.bin), mètres locaux, x = est, z = sud.
 // Relief : maillage régulier de 10 m ; routes, parcs, arbres et bâtiments y sont posés.
@@ -393,8 +393,9 @@ function buildingGeometry(b, R, T) {
   else if (b.k === 2) { wallC = c3(PAL.castle); roofC = c3(PAL.churchRoof); }
   else if (b.k === 3) { wallC = c3(PAL.industrial); roofC = c3(PAL.industrialRoof); }
   else { wallC = c3(PAL.walls[b.c % PAL.walls.length]); roofC = c3(PAL.roofs[(b.c * 3 + (R() < 0.15 ? 3 : 0)) % PAL.roofs.length]); }
-  if (b.wc) wallC = c3(b.wc);
-  if (b.rc) roofC = c3(b.rc);
+  // Couleurs OSM adoucies (certaines sont du noir ou du blanc pur) : on les mélange à la teinte du quartier.
+  if (b.wc) wallC = c3(b.wc).lerp(wallC, 0.35);
+  if (b.rc) roofC = c3(b.rc).lerp(roofC, 0.35);
   wallC.multiplyScalar(0.94 + R() * 0.1);
   b.wall = wallC;
   const S = new Soup();
@@ -589,6 +590,57 @@ export async function buildCity(scene, data, { mobile = false, demBuf, demMeta, 
     const [tx, tz] = k.split(',').map(Number);
     return { cx: (tx + 0.5) * TILE, cz: (tz + 0.5) * TILE, list, body: null, lines: null };
   });
+  // Vue lointaine : chaque bâtiment est un pavé orienté (rectangle englobant de plus petite aire), en instances par tuile.
+  // La tuile détaillée remplace ses pavés dès qu'elle est construite.
+  function footprintBox(b) {
+    const n = b.p.length / 2, xs = new Float32Array(n), zs = new Float32Array(n);
+    for (let i = 0; i < n; i++) { xs[i] = b.p[i * 2] / 10; zs[i] = b.p[i * 2 + 1] / 10; }
+    let best = null;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      let dx = xs[j] - xs[i], dz = zs[j] - zs[i];
+      const l = Math.hypot(dx, dz);
+      if (l < 0.5) continue;
+      dx /= l; dz /= l;
+      let u0 = 1e9, u1 = -1e9, v0 = 1e9, v1 = -1e9;
+      for (let k = 0; k < n; k++) {
+        const u = xs[k] * dx + zs[k] * dz, v = -xs[k] * dz + zs[k] * dx;
+        if (u < u0) u0 = u; if (u > u1) u1 = u; if (v < v0) v0 = v; if (v > v1) v1 = v;
+      }
+      const a = (u1 - u0) * (v1 - v0);
+      if (!best || a < best.a) best = { a, dx, dz, u0, u1, v0, v1 };
+    }
+    if (!best) return null;
+    const cu = (best.u0 + best.u1) / 2, cv = (best.v0 + best.v1) / 2;
+    return { x: cu * best.dx - cv * best.dz, z: cu * best.dz + cv * best.dx, w: best.u1 - best.u0, d: best.v1 - best.v0, ang: Math.atan2(-best.dz, best.dx) };
+  }
+  const farGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+  {
+    // Toit sombre (ardoise) : face du dessus teintée, les murs gardent la couleur de l'instance.
+    const col = new Float32Array(farGeo.attributes.position.count * 3).fill(1);
+    for (let v = 8; v < 12; v++) { col[v * 3] = 0.34; col[v * 3 + 1] = 0.38; col[v * 3 + 2] = 0.5; }
+    farGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  }
+  const farMat = toon('#ffffff', { vertexColors: true });
+  const fm = new THREE.Matrix4(), fq = new THREE.Quaternion(), fp = new THREE.Vector3(), fs = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+  for (const t of tileList) {
+    const boxes = [];
+    for (const b of t.list) { const o = footprintBox(b); if (o) boxes.push([b, o]); }
+    if (!boxes.length) continue;
+    const im = new THREE.InstancedMesh(farGeo, farMat, boxes.length);
+    boxes.forEach(([b, o], i) => {
+      fq.setFromAxisAngle(up, o.ang);
+      fm.compose(fp.set(o.x, b.y0, o.z), fq, fs.set(Math.max(o.w, 1.5), Math.max(b.y1 - b.y0, 2), Math.max(o.d, 1.5)));
+      im.setMatrixAt(i, fm);
+      let wc;
+      if (b.wc) wc = '#' + c3(b.wc).lerp(c3(PAL.walls[b.c % PAL.walls.length]), 0.35).getHexString();
+      else if (b.k === 1) wc = PAL.church; else if (b.k === 2) wc = PAL.castle; else if (b.k === 3) wc = PAL.industrial;
+      else wc = PAL.walls[b.c % PAL.walls.length];
+      im.setColorAt(i, c3(wc));
+    });
+    root.add(im);
+    t.far = im;
+  }
   const BUILD_R = mobile ? 700 : 1300, DETAIL_R = mobile ? 150 : 250;
   const tileQueue = [];
   function buildTile(t) {
@@ -604,12 +656,14 @@ export async function buildCity(scene, data, { mobile = false, demBuf, demMeta, 
     lg.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3));
     t.lines = new THREE.LineSegments(lg, lineMat);
     root.add(t.body, t.lines);
+    if (t.far) t.far.visible = false;
     g.forEach((x) => x.dispose());
   }
   function freeTile(t) {
     root.remove(t.body, t.lines);
     t.body.geometry.dispose(); t.lines.geometry.dispose();
     t.body = t.lines = null;
+    if (t.far) t.far.visible = true;
   }
 
   // Arbres : instances (tronc + feuillage), posées sur le relief.

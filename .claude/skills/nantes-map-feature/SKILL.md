@@ -18,6 +18,7 @@ The site is static (GitHub Pages, repo `KBenjaminPajusco/nantes-world`, project 
 - Leaderboard = sum of `n` per `who`, done by the page itself. Never store totals.
 - "Léa climbed Butte Sainte-Anne twice today" → append `{ "challenge": "butte-sainte-anne", "who": "Léa", "date": <today>, "n": 2 }`. Use a consistent first name spelling (look at existing `who` values first).
 - Friends can also play in the page (they enter their first name in the "Défis" panel, walking into the zone counts, "Copier mes exploits" gives JSON). When the user pastes such JSON, append it to `events.json` as is.
+- Souvenir trails and automatic scores from GPS: `python tools/gpx_import.py --who <Prénom> file.gpx` (friends export GPX from Strava/Garmin and send it) or `python tools/strava_sync.py sync` (the owner's own Strava, see the file header). Both write `data/events.json` and `data/tracks.json`, trim 300 m at each end for privacy, and dedupe by activity. Do not try to pull other people's Strava data through one API app: Strava forbids showing a user's data to others, and an unreviewed app only connects its owner.
 - Coordinates: geocode with Nominatim (`https://nominatim.openstreetmap.org/search?q=…&format=jsonv2`, send a User-Agent, 1 request/s). If a place is not found (bars often are not), ask the user for the street address instead of guessing.
 - Ids are lowercase-kebab and stable; never reuse an id for something else.
 

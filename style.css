@@ -70,3 +70,6 @@ body.editing #scene { cursor: crosshair; }
 .board li i { opacity: .6; font-style: normal; margin-left: 4px; }
 .board .copy { font: 600 11px 'Space Grotesk', sans-serif; background: none; border: 1.5px solid var(--ink); border-radius: 8px; padding: 3px 8px; cursor: pointer; color: var(--ink); }
 @media (max-width: 640px), (pointer: coarse) and (max-width: 950px) { .board { top: 56px; width: 170px; font-size: 12px; } }
+.board .trails { margin-top: 6px; font-size: 11px; font-weight: 700; line-height: 1.5; }
+.board .trails i { font-style: normal; white-space: nowrap; }
+.board .trails label { margin-right: 4px; }
