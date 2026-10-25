@@ -1,0 +1,16 @@
+{
+  "challenges": [
+    {
+      "id": "butte-sainte-anne",
+      "emoji": "⛰️",
+      "title": "Butte Sainte-Anne",
+      "unit": "montées",
+      "text": "Celui qui monte le plus souvent en haut de la Butte Sainte-Anne gagne la couronne.",
+      "lat": 47.2031555,
+      "lon": -1.5800523,
+      "radius": 28,
+      "maxAlt": 45,
+      "color": "#ffc845"
+    }
+  ]
+}

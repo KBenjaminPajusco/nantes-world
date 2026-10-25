@@ -19,9 +19,9 @@ html = re.sub(r'href="style\.css(\?v=\w+)?"', f'href="style.css?v={version}"', h
 html = re.sub(r'src="src/main\.js(\?v=\w+)?"', f'src="src/main.js?v={version}"', html)
 index.write_text(html, encoding='utf8', newline='')
 
-for path in (ROOT / 'src').glob('*.js'):
+for path in (ROOT / 'src').rglob('*.js'):
     code = path.read_bytes().decode('utf8')
-    stamped = re.sub(r"(from\s+'\./[\w-]+\.js)(\?v=\w+)?'", rf"\1?v={version}'", code)
+    stamped = re.sub(r"(from\s+'\./[\w/-]+\.js)(\?v=\w+)?'", rf"\1?v={version}'", code)
     if stamped != code:
         path.write_text(stamped, encoding='utf8', newline='')
 

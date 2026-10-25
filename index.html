@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261025160413">
+  <link rel="stylesheet" href="style.css?v=20261025162727">
   <script type="importmap">
     {
       "imports": {
@@ -31,12 +31,12 @@
   </header>
 
   <nav class="tools">
-    <button id="btn-sky" title="Vue du ciel (V)">🛰️ <span>Ciel</span></button>
+    <button id="btn-sky" title="Altitude haute / basse (V)">✈️ <span>Altitude</span></button>
     <button id="btn-edit" title="Placer des points (P)">📍 <span>Placer</span></button>
     <button id="export" hidden title="Copie le pois.json à mettre dans data/">📋 <span>Exporter</span></button>
   </nav>
   <p id="hint" hidden></p>
-  <p class="help">ZQSD / flèches : marcher · Maj : courir · glisser : tourner · molette : zoom · V : ciel · P : placer · données © contributeurs <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></p>
+  <p class="help">ZQSD / flèches : voler · Maj : turbo · Espace / C : monter, descendre · clic : y aller · glisser : tourner · molette : zoom · V : altitude · P : placer · données © contributeurs <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></p>
 
   <section id="card" class="card" hidden>
     <button class="close" aria-label="Fermer">×</button>
@@ -60,10 +60,12 @@
     <div class="row"><button type="submit" class="ok">Enregistrer</button><button type="button" class="cancel">Annuler</button><button type="button" class="del" hidden>Supprimer</button></div>
   </form>
 
-  <div id="joy" class="joy" hidden aria-label="Joystick"><div class="joy-knob"></div></div>
+  <div id="toast" class="toast" hidden></div>
+
+  <div id="joy"class="joy" hidden aria-label="Joystick"><div class="joy-knob"></div></div>
 
   <div id="loading"><div class="box"><strong>Nantes</strong><div class="bar"><i></i></div><span class="msg">Construction de la ville…</span></div></div>
 
-  <script type="module" src="src/main.js?v=20261025160413"></script>
+  <script type="module" src="src/main.js?v=20261025162727"></script>
 </body>
 </html>

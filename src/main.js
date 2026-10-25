@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { buildCity } from './city.js?v=20261025160413';
-import { person } from './characters.js?v=20261025160413';
+import { buildCity } from './city.js?v=20261025162727';
+import { solid } from './toon.js?v=20261025162727';
+import { initFeatures, updateFeatures } from './features/index.js?v=20261025162727';
 
 const $ = (s) => document.querySelector(s);
 const clamp = THREE.MathUtils.clamp;
@@ -14,13 +15,12 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 1.5 : 2));
 renderer.shadowMap.enabled = !MOBILE;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-const SKY = '#cfe7f6';
+const SKY = '#a8c4d8';
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(SKY);
-scene.fog = new THREE.Fog(SKY, 1100, 4200);
 const camera = new THREE.PerspectiveCamera(30, 1, 3, 9000);
-scene.add(new THREE.HemisphereLight('#ffffff', '#b9c9b0', 1.5));
-const sun = new THREE.DirectionalLight('#fff3dc', 2.3);
+scene.add(new THREE.HemisphereLight('#e8f0ff', '#7d7a66', 1.15));
+const sun = new THREE.DirectionalLight('#ffeccc', 2.1);
 sun.castShadow = !MOBILE;
 sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -150, right: 150, top: 150, bottom: -150, near: 10, far: 700 });
@@ -42,54 +42,68 @@ const KX = 111320 * Math.cos(LAT0 * Math.PI / 180), KZ = 110574;
 const toXZ = (lat, lon) => ({ x: (lon - LON0) * KX, z: -(lat - LAT0) * KZ });
 const toLL = (x, z) => ({ lat: LAT0 - z / KZ, lon: LON0 + x / KX });
 
-// --- Marcheur
-class Walker {
+// --- Planeur : un petit avion en papier qu'on pilote au-dessus de la ville.
+class Glider {
   constructor() {
-    this.root = person({ shirt: '#ff6a4d', pants: '#26324a', skin: '#f2c9a0', hair: '#3a2618' });
-    this.root.scale.setScalar(2.2);
-    // Silhouette visible à travers les bâtiments (dessinée après le décor, avant le personnage).
-    const xray = new THREE.MeshBasicMaterial({ color: '#ff6a4d', depthWrite: false, depthFunc: THREE.GreaterDepth });
-    const meshes = [];
-    this.root.traverse((o) => { if (o.isMesh && !(o.material instanceof THREE.ShaderMaterial)) meshes.push(o); });
-    this.root.traverse((o) => { if (o.isMesh && o.material instanceof THREE.ShaderMaterial) o.renderOrder = 13; });
-    for (const m of meshes) {
-      m.renderOrder = 12;
-      const ghost = new THREE.Mesh(m.geometry, xray);
-      ghost.renderOrder = 11;
-      m.add(ghost);
+    const wings = new THREE.BufferGeometry();
+    wings.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 3, -2.4, 0.2, -1.8, 0, 0, -0.9, 0, 0, 3, 0, 0, -0.9, 2.4, 0.2, -1.8], 3));
+    wings.computeVertexNormals();
+    const keel = new THREE.BufferGeometry();
+    keel.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 3, 0, 0, -0.9, 0, -0.95, -1.3], 3));
+    keel.computeVertexNormals();
+    this.root = new THREE.Group();
+    this.body = new THREE.Group();
+    this.root.add(this.body);
+    for (const m of [solid(wings, '#ff6a4d', { outlineWidth: 0.07 }), solid(keel, '#fbf7ec', { outlineWidth: 0.06 })]) {
+      m.material = m.material.clone();
+      m.material.side = THREE.DoubleSide;
+      this.body.add(m);
     }
+    this.body.scale.setScalar(2.8);
     this.pos = new THREE.Vector2();
-    this.heading = Math.PI;
-    this.speed = 0;
+    this.vel = new THREE.Vector2();
+    this.heading = 0;
+    this.bank = 0;
     this.y = 0;
-    this.phase = 0;
+    this.alt = 70; // hauteur de croisière au-dessus du sol / des toits
+    this.agl = 0;
+    this.goto = null;
   }
   place(x, z, city) {
     this.pos.set(x, z);
-    this.y = city.groundY(x, z);
-    this.speed = 0;
+    this.vel.set(0, 0);
+    this.y = city.surfaceY(x, z) + this.alt;
   }
-  update(dt, move, run, city, bounds) {
-    const len = Math.min(move.length(), 1);
-    this.speed = THREE.MathUtils.damp(this.speed, len * (run ? 42 : 15), 10, dt);
-    if (len > 0.05) {
-      const want = Math.atan2(move.x, move.y);
-      const err = Math.atan2(Math.sin(want - this.heading), Math.cos(want - this.heading));
-      this.heading += err * Math.min(1, dt * 12);
+  update(dt, input, boost, city, bounds) {
+    const dir = input.clone();
+    if (dir.length() > 0.05) this.goto = null;
+    else if (this.goto) {
+      const dx = this.goto.x - this.pos.x, dz = this.goto.z - this.pos.y, d = Math.hypot(dx, dz);
+      if (d < 12) this.goto = null; else dir.set(dx / d, dz / d).multiplyScalar(Math.min(1, d / 120 + 0.25));
     }
-    const step = new THREE.Vector2(Math.sin(this.heading), Math.cos(this.heading)).multiplyScalar(this.speed * dt);
-    for (const s of [step, new THREE.Vector2(step.x, 0), new THREE.Vector2(0, step.y)]) {
-      const nx = this.pos.x + s.x, nz = this.pos.y + s.y;
-      if (nx > bounds[0] && nx < bounds[2] && nz > bounds[1] && nz < bounds[3] && city.walkable(nx, nz, 1.3)) { this.pos.set(nx, nz); break; }
+    const base = clamp(55 + this.alt * 0.7, 55, 420) * (boost ? 2.6 : 1);
+    const l = Math.min(dir.length(), 1);
+    if (l > 0) dir.normalize().multiplyScalar(l * base);
+    this.vel.x = THREE.MathUtils.damp(this.vel.x, dir.x, 2.2, dt);
+    this.vel.y = THREE.MathUtils.damp(this.vel.y, dir.y, 2.2, dt);
+    this.pos.x = clamp(this.pos.x + this.vel.x * dt, bounds[0], bounds[2]);
+    this.pos.y = clamp(this.pos.y + this.vel.y * dt, bounds[1], bounds[3]);
+    const speed = this.vel.length();
+    let err = 0;
+    if (speed > 4) {
+      const want = Math.atan2(this.vel.x, this.vel.y);
+      err = Math.atan2(Math.sin(want - this.heading), Math.cos(want - this.heading));
+      this.heading += err * Math.min(1, dt * 5);
     }
-    this.y = THREE.MathUtils.damp(this.y, city.groundY(this.pos.x, this.pos.y), 12, dt);
-    this.phase += dt * this.speed * 0.6;
-    const swing = Math.min(this.speed / 15, 1);
-    const { legs, arms } = this.root.userData;
-    legs.forEach((l, i) => { l.rotation.x = Math.sin(this.phase + i * Math.PI) * 0.8 * swing; });
-    arms.forEach((a, i) => { a.rotation.x = -Math.sin(this.phase + i * Math.PI) * 0.7 * swing; });
-    this.root.position.set(this.pos.x, this.y + Math.abs(Math.sin(this.phase)) * 0.3 * swing, this.pos.y);
-    this.root.rotation.y = this.heading;
+    this.bank = THREE.MathUtils.damp(this.bank, clamp(-err * 1.4, -0.8, 0.8) * Math.min(speed / 50, 1), 6, dt);
+    // Altitude : au-dessus du point le plus haut (sol ou toit) ici et un peu devant.
+    const wantY = Math.max(city.surfaceY(this.pos.x, this.pos.y), city.surfaceY(this.pos.x + this.vel.x * 0.9, this.pos.y + this.vel.y * 0.9)) + this.alt;
+    this.y = THREE.MathUtils.damp(this.y, wantY, wantY > this.y ? 3.5 : 1.6, dt);
+    this.agl = this.y - city.terrain.h(this.pos.x, this.pos.y);
+    const pitch = clamp((wantY - this.y) * 0.04, -0.35, 0.35);
+    this.root.position.set(this.pos.x, this.y, this.pos.y);
+    this.root.rotation.set(0, this.heading, 0);
+    this.body.rotation.set(-pitch, 0, this.bank);
   }
 }
 
@@ -116,7 +130,8 @@ function mergedPois() {
 function makePin(p) {
   const { x, z } = p.lat != null ? toXZ(p.lat, p.lon) : p;
   const g = new THREE.Group();
-  g.position.set(x, 0, z);
+  const y = city.terrain.h(x, z);
+  g.position.set(x, y, z);
   const col = p.color || '#ff6a4d';
   const ball = new THREE.Mesh(pinGeo.ball, pinMat(col)); ball.position.y = 14;
   const cone = new THREE.Mesh(pinGeo.cone, pinMat(col)); cone.position.y = 9.5;
@@ -131,7 +146,7 @@ function makePin(p) {
   el.querySelector('.t').textContent = p.title || '';
   el.addEventListener('click', (ev) => { ev.stopPropagation(); openCard(p.id); });
   labelsEl.appendChild(el);
-  return { data: p, group: g, ball, cone, hit, label: el, x, z };
+  return { data: p, group: g, ball, cone, hit, label: el, x, y, z };
 }
 
 function syncPois() {
@@ -224,15 +239,14 @@ $('#export').addEventListener('click', async () => {
 $('#btn-edit').addEventListener('click', () => setEdit(!editMode));
 
 // --- Caméra, commandes
-const cam = { az: 0.55, el: 0.82, dist: 150 };
+const cam = { az: 0.55, el: 0.4, dist: 190 };
 const target = new THREE.Vector3();
-let skyMode = false;
 const keys = new Set();
 let started = false;
 addEventListener('keydown', (e) => {
   if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
   const k = e.key.toLowerCase();
-  if (k === 'v') return setSky(!skyMode);
+  if (k === 'v') return toggleAlt();
   if (k === 'p') return setEdit(!editMode);
   if (k === 'escape') { closeCard(); ed.hidden = true; return; }
   keys.add(k);
@@ -241,12 +255,13 @@ addEventListener('keydown', (e) => {
 addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 addEventListener('blur', () => keys.clear());
 
-function setSky(on) {
-  skyMode = on;
-  $('#btn-sky').classList.toggle('on', on);
-  if (on) { cam.dist = Math.max(cam.dist, 900); cam.el = Math.max(cam.el, 1.0); } else { cam.dist = 150; cam.el = 0.82; target.set(walker.pos.x, 0, walker.pos.y); }
+function toggleAlt() {
+  const high = walker.alt < 200;
+  walker.alt = high ? 380 : 60;
+  $('#btn-sky').classList.toggle('on', high);
+  if (high) cam.dist = Math.max(cam.dist, 260);
 }
-$('#btn-sky').addEventListener('click', () => setSky(!skyMode));
+$('#btn-sky').addEventListener('click', toggleAlt);
 
 // Pointeur : glisser = tourner / incliner, clic = toucher un point ou un lieu, molette / pincement = zoom.
 const ptrs = new Map();
@@ -282,7 +297,24 @@ canvas.addEventListener('wheel', (e) => { e.preventDefault(); cam.dist = clamp(c
 
 const ray = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
-const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+// Point du sol visé par un rayon : on avance pas à pas jusqu'à passer sous le relief, puis dichotomie.
+function pickGround(r) {
+  const o = r.origin, d = r.direction;
+  const h = (t) => city.terrain.h(o.x + d.x * t, o.z + d.z * t);
+  let t = 0;
+  while (t < 12000) {
+    const step = Math.max(2, t * 0.01);
+    t += step;
+    const x = o.x + d.x * t, z = o.z + d.z * t;
+    if (x < bounds[0] || x > bounds[2] || z < bounds[1] || z > bounds[3]) return null;
+    if (o.y + d.y * t < h(t)) {
+      let a = t - step, b = t;
+      for (let k = 0; k < 8; k++) { const m = (a + b) / 2; if (o.y + d.y * m < h(m)) b = m; else a = m; }
+      return new THREE.Vector3(o.x + d.x * b, 0, o.z + d.z * b);
+    }
+  }
+  return null;
+}
 function onClick(e) {
   ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   ray.setFromCamera(ndc, camera);
@@ -292,10 +324,10 @@ function onClick(e) {
     if (editMode) openEditor(pois.get(id).data); else openCard(id);
     return;
   }
-  const pt = new THREE.Vector3();
-  if (!ray.ray.intersectPlane(plane, pt)) return;
+  const pt = pickGround(ray.ray);
+  if (!pt) return;
   if (editMode) openEditor({ x: pt.x, z: pt.z });
-  else if (skyMode && city.walkable(pt.x, pt.z, 1.3)) { walker.place(pt.x, pt.z, city); target.set(pt.x, 0, pt.z); setSky(false); }
+  else walker.goto = { x: pt.x, z: pt.z }; // clic = y aller en volant
 }
 
 // Joystick tactile.
@@ -318,33 +350,61 @@ if (MOBILE) {
 }
 
 // --- Démarrage
-const walker = new Walker();
+const walker = new Glider();
 scene.add(walker.root);
 let city, bounds;
 
 async function boot() {
-  const [data, poiData] = await Promise.all([
+  const [data, demMeta, demBuf, poiData] = await Promise.all([
     fetch(`data/nantes.json?v=${V}`).then((r) => r.json()),
+    fetch(`data/dem.json?v=${V}`).then((r) => r.json()),
+    fetch(`data/dem.bin?v=${V}`).then((r) => r.arrayBuffer()),
     fetch(`data/pois.json?v=${V}`).then((r) => r.json()).catch(() => ({ pois: [] })),
   ]);
   bounds = data.bounds;
   basePois = poiData.pois;
   const bar = $('#loading .bar i');
-  city = await buildCity(scene, data, { mobile: MOBILE, onProgress: (f) => { bar.style.width = `${Math.round(f * 100)}%`; } });
+  city = await buildCity(scene, data, { mobile: MOBILE, demMeta, demBuf, onProgress: (f) => { bar.style.width = `${Math.round(f * 100)}%`; } });
   // Point de départ : #lat,lon dans l'adresse, sinon place du Commerce (ou la case libre la plus proche).
   let sx = 0, sz = -30;
+  if (basePois[0]?.lat != null) ({ x: sx, z: sz } = toXZ(basePois[0].lat, basePois[0].lon)); // chez nous
   const m = location.hash.match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
   if (m) ({ x: sx, z: sz } = toXZ(+m[1], +m[2]));
-  for (let r = 0; r < 200 && !city.walkable(sx, sz, 1.3); r += 2) {
-    const a = r * 2.4; sx += Math.cos(a) * 2; sz += Math.sin(a) * 2;
-  }
   walker.place(sx, sz, city);
-  target.set(sx, 0, sz);
+  target.set(sx, walker.y, sz);
+  city.warm(sx, sz);
   syncPois();
+  await initFeatures(featureCtx);
   $('#loading').classList.add('done');
   started = true;
   requestAnimationFrame(frame);
 }
+
+// --- Contexte offert aux modules de src/features/
+const toastEl = $('#toast');
+let toastTimer = 0;
+const confetti = [];
+const featureCtx = {
+  THREE, scene, walker, toXZ, toLL,
+  get city() { return city; },
+  loadJSON: (path) => fetch(`${path}?v=${V}`).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
+  ui: {
+    toast(msg) {
+      toastEl.textContent = msg; toastEl.hidden = false;
+      clearTimeout(toastTimer); toastTimer = setTimeout(() => { toastEl.hidden = true; }, 4200);
+    },
+    // Gerbe de confettis à (x, z) : de petits cubes qui retombent.
+    burst(x, z, color = '#ffc845') {
+      const cols = [color, '#ff6a4d', '#4d7cff', '#ffffff', '#2f9e55'];
+      for (let i = 0; i < 40; i++) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.12), new THREE.MeshBasicMaterial({ color: cols[i % cols.length] }));
+        m.position.set(x, 4, z);
+        scene.add(m);
+        confetti.push({ m, v: new THREE.Vector3((Math.random() - 0.5) * 16, 12 + Math.random() * 14, (Math.random() - 0.5) * 16), life: 2.2 });
+      }
+    },
+  },
+};
 
 const tmp = new THREE.Vector3();
 const clock = new THREE.Clock();
@@ -359,22 +419,29 @@ function frame() {
   const fx = k('d') + k('arrowright') - k('a') - k('q') - k('arrowleft');
   const fz = k('s') + k('arrowdown') - k('w') - k('z') - k('arrowup');
   const inp = new THREE.Vector2(fx + joyV.x, fz + joyV.y);
-  const run = keys.has('shift') || joyV.length() > 0.85;
+  const run = keys.has('shift') || joyV.length() > 0.9;
   const sa = Math.sin(cam.az), ca = Math.cos(cam.az);
   // (x droite écran, z bas écran) -> monde : la caméra regarde vers -z tourné de az.
   const world = new THREE.Vector2(inp.x * ca + inp.y * sa, -inp.x * sa + inp.y * ca);
-  if (skyMode) {
-    const sp = cam.dist * 0.9 * dt * (run ? 2 : 1);
-    target.x = clamp(target.x + world.x * sp, bounds[0], bounds[2]);
-    target.z = clamp(target.z + world.y * sp, bounds[1], bounds[3]);
-  } else {
-    walker.update(dt, world, run, city, bounds);
-    target.lerp(tmp.set(walker.pos.x, walker.y + 3, walker.pos.y), 1 - Math.exp(-dt * 8));
+  const up = k(' ') + k('r') - k('c') - k('f');
+  if (up) walker.alt = clamp(walker.alt * Math.exp(up * dt * 1.3), 18, 700);
+  walker.update(dt, world, run, city, bounds);
+  target.lerp(walker.root.position, 1 - Math.exp(-dt * 7));
+
+  city.updateDetail(walker.pos.x, walker.pos.y, t);
+  updateFeatures(featureCtx, dt);
+  for (let i = confetti.length - 1; i >= 0; i--) {
+    const c = confetti[i];
+    c.life -= dt; c.v.y -= 28 * dt;
+    c.m.position.addScaledVector(c.v, dt); c.m.rotation.x += dt * 8; c.m.rotation.y += dt * 6;
+    if (c.life <= 0 || c.m.position.y < 0) { scene.remove(c.m); c.m.geometry.dispose(); c.m.material.dispose(); confetti.splice(i, 1); }
   }
 
   // Caméra orbitale.
   const ce = Math.cos(cam.el), se = Math.sin(cam.el);
   camera.position.set(target.x + Math.sin(cam.az) * ce * cam.dist, target.y + se * cam.dist, target.z + Math.cos(cam.az) * ce * cam.dist);
+  const floor = city.surfaceY(camera.position.x, camera.position.z) + 5;
+  if (camera.position.y < floor) camera.position.y = floor;
   camera.lookAt(target);
   sun.position.set(target.x + 220, 340, target.z + 160);
   sun.target.position.copy(target);
@@ -390,7 +457,7 @@ function frame() {
     e.ball.position.y = (14 + bob) ;
     e.cone.position.y = 9.5 + bob;
     e.group.children[2].rotation.y = t;
-    tmp.set(e.x, 16 * sc, e.z).project(camera);
+    tmp.set(e.x, e.y + 16 * sc, e.z).project(camera);
     const vis = tmp.z < 1 && Math.abs(tmp.x) < 1.15 && Math.abs(tmp.y) < 1.15;
     e.label.style.display = vis ? '' : 'none';
     if (vis) {
@@ -398,11 +465,11 @@ function frame() {
       e.label.classList.toggle('far', camera.position.distanceTo(e.group.position) > 700 && id !== openId);
     }
   }
-  if (!skyMode && !editMode && near && nd < 14 && ed.hidden) { if (openId !== near && dismissed !== near) openCard(near); }
-  if (nd > 30) dismissed = null;
-  if (!skyMode && openId && nd > 40 && ed.hidden) closeCard();
+  if (!editMode && near && nd < 40 && ed.hidden) { if (openId !== near && dismissed !== near) openCard(near); }
+  if (nd > 80) dismissed = null;
+  if (openId && nd > 110 && ed.hidden && !editMode) closeCard();
 
-  $('#coords').textContent = (() => { const p = skyMode ? { x: target.x, z: target.z } : { x: walker.pos.x, z: walker.pos.y }; const l = toLL(p.x, p.z); return `${l.lat.toFixed(5)}, ${l.lon.toFixed(5)}`; })();
+  $('#coords').textContent = (() => { const p = { x: walker.pos.x, z: walker.pos.y }; const l = toLL(p.x, p.z); return `${l.lat.toFixed(5)}, ${l.lon.toFixed(5)}`; })();
   renderer.render(scene, camera);
 }
 

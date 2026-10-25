@@ -14,7 +14,7 @@ LAT0, LON0 = 47.2132, -1.5559  # place du Commerce
 KX = 111320 * math.cos(math.radians(LAT0))
 KZ = 110574
 # Emprise conservée (m) : on coupe les objets entièrement hors cadre.
-BOUNDS = (-3330, -2750, 3330, 1700)  # x0, z0, x1, z1
+BOUNDS = (-3330, -2750, 3330, 5000)  # x0, z0, x1, z1
 
 
 def proj(p):
@@ -22,8 +22,34 @@ def proj(p):
 
 
 def load(name):
-    with open(os.path.join(RAW, name + '.json'), encoding='utf-8') as f:
-        return json.load(f)['elements']
+    """Fusionne raw/<name>.json et les emprises supplémentaires raw/<name>_*.json (dédoublonnées par type+id)."""
+    import glob
+    out, seen = [], set()
+    for path in [os.path.join(RAW, name + '.json')] + sorted(glob.glob(os.path.join(RAW, name + '_*.json'))):
+        with open(path, encoding='utf-8') as f:
+            for e in json.load(f)['elements']:
+                k = (e['type'], e['id'])
+                if k not in seen:
+                    seen.add(k)
+                    out.append(e)
+    return out
+
+
+NAMED = {'white': '#ece8dc', 'beige': '#d6c8a6', 'cream': '#e6dcc0', 'yellow': '#d8c27a', 'grey': '#9a9a9a', 'gray': '#9a9a9a',
+         'red': '#a0462f', 'brown': '#8a6040', 'black': '#3a3a3e', 'blue': '#4a6a8f', 'green': '#5f7f5a', 'orange': '#c8794a',
+         'pink': '#d9a99a', 'tan': '#c8b08a', 'slate': '#4a5260', 'silver': '#b7bbc2'}
+
+
+def colour(v):
+    """Teinte OSM -> '#rrggbb' (nom courant ou hexadécimal), sinon None."""
+    if not v:
+        return None
+    v = str(v).strip().lower()
+    if v in NAMED:
+        return NAMED[v]
+    if len(v) == 7 and v[0] == '#' and all(c in '0123456789abcdef' for c in v[1:]):
+        return v
+    return None
 
 
 def inside(pts):
@@ -168,7 +194,13 @@ def main():
             kind = 2
         elif t.get('building') in ('industrial', 'warehouse', 'garage', 'garages', 'shed', 'roof'):
             kind = 3
-        B.append({'p': q(g), 'h': round(max(h, 2.5) * 10), 'k': kind, 'c': rnd.randrange(5)})
+        b = {'p': q(g), 'h': round(max(h, 2.5) * 10), 'k': kind, 'c': rnd.randrange(5)}
+        # Couleurs saisies par les contributeurs OSM (building:colour / roof:colour), quand elles existent.
+        for key, tag in (('wc', 'building:colour'), ('rc', 'roof:colour')):
+            col = colour(t.get(tag))
+            if col:
+                b[key] = col
+        B.append(b)
     data['buildings'] = B
 
     # --- Routes : classe 0 grande, 1 moyenne, 2 résidentielle, 3 service, 4 piéton large, 5 sentier ; flag pont/tunnel.
@@ -178,7 +210,7 @@ def main():
         'residential': 2, 'unclassified': 2, 'living_street': 2, 'service': 3, 'pedestrian': 4,
         'footway': 5, 'path': 5, 'cycleway': 5, 'steps': 5, 'track': 5, 'bridleway': 5,
     }
-    R = []
+    R, S = [], []
     for el in load('roads'):
         t = el.get('tags', {})
         c = cls.get(t.get('highway'))
@@ -194,8 +226,13 @@ def main():
         g = dp(g, 0.4)
         # Un passage piéton qui est une surface (area:highway) n'est pas une ligne.
         bridge = 1 if t.get('bridge') not in (None, 'no') else 0
+        if t.get('highway') == 'steps':
+            # Les escaliers sont dessinés marche par marche (altitudes ajoutées par tools/fetch_dem.py).
+            S.append({'p': q(dp(g, 0.15)), 'w': float(str(t.get('width', '2')).split()[0].replace(',', '.') or 2) if str(t.get('width', '2'))[0].isdigit() else 2.0})
+            continue
         R.append({'c': c, 'b': bridge, 'p': q(g), 'n': t.get('name', '') if c <= 1 else ''})
     data['roads'] = R
+    data['steps'] = S
 
     # --- Tram / rail.
     T = []
