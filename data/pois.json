@@ -1,0 +1,17 @@
+{
+  "pois": [
+    { "id": "commerce", "emoji": "⚓", "title": "Place du Commerce", "text": "Point de départ de la carte (origine du repère). La Bourse d’un côté, le tram de l’autre.", "lat": 47.2132, "lon": -1.5559, "color": "#4d7cff" },
+    { "id": "chateau", "emoji": "🏰", "title": "Château des ducs de Bretagne", "text": "Forteresse de tuffeau blanc au cœur de la ville, avec ses remparts promenade.", "lat": 47.2163, "lon": -1.5496, "color": "#ffc845" },
+    { "id": "cathedrale", "emoji": "⛪", "title": "Cathédrale Saint-Pierre-et-Saint-Paul", "text": "Quatre siècles de chantier, une nef en tuffeau très haute et très claire.", "lat": 47.21838, "lon": -1.55026, "color": "#ffc845" },
+    { "id": "graslin", "emoji": "🎭", "title": "Théâtre Graslin", "text": "L’Opéra, perché en haut de ses marches. Le quartier Graslin se joue juste autour.", "lat": 47.21356, "lon": -1.56221, "color": "#a25dd9" },
+    { "id": "pommeraye", "emoji": "🛍️", "title": "Passage Pommeraye", "text": "Passage couvert à trois niveaux, escalier monumental et statues. À 2 min de Graslin.", "lat": 47.2138, "lon": -1.5585, "color": "#a25dd9" },
+    { "id": "tour-bretagne", "emoji": "🏙️", "title": "Tour de Bretagne", "text": "La plus haute de la ville : 144 m, vue à 360° au dernier étage.", "lat": 47.2177, "lon": -1.5582, "color": "#1d2533" },
+    { "id": "lieu-unique", "emoji": "🍪", "title": "Le Lieu Unique", "text": "L’ancienne usine LU (les petits-beurre) devenue lieu culturel. La tour est toujours là.", "lat": 47.21536, "lon": -1.54584, "color": "#ff6a4d" },
+    { "id": "machines", "emoji": "🐘", "title": "Les Machines de l’île", "text": "Le Grand Éléphant de 12 m qui se promène avec des passagers, et le Carrousel des Mondes Marins.", "lat": 47.2059, "lon": -1.5629, "color": "#2f9e55" },
+    { "id": "hangar-bananes", "emoji": "🍌", "title": "Hangar à Bananes", "text": "Les quais de la Loire côté île de Nantes : bars, restos, terrasses au bord de l’eau.", "lat": 47.20033, "lon": -1.57354, "color": "#ffc845" },
+    { "id": "jules-verne", "emoji": "🚀", "title": "Musée Jules Verne", "text": "Nantes est la ville natale de Jules Verne : voyages extraordinaires garantis.", "lat": 47.20161, "lon": -1.57739, "color": "#4d7cff" },
+    { "id": "jardin-plantes", "emoji": "🌿", "title": "Jardin des Plantes", "text": "Serres, camélias géants et pelouses à deux pas de la gare.", "lat": 47.2177, "lon": -1.5425, "color": "#2f9e55" },
+    { "id": "gare", "emoji": "🚆", "title": "Gare de Nantes", "text": "Gare Nord et gare Sud : l’entrée et la sortie de la carte pour tout le monde.", "lat": 47.2169, "lon": -1.5424, "color": "#1d2533" },
+    { "id": "bouffay", "emoji": "🍻", "title": "Quartier du Bouffay", "text": "Ruelles médiévales, colombages et bars : le quartier des soirées.", "lat": 47.2146, "lon": -1.5524, "color": "#ff6a4d" }
+  ]
+}
